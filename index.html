@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gemini Song Lyric Studio</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #121212;
+      color: #f5f5f5;
+      max-width: 680px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    .card {
+      background: #1e1e1e;
+      padding: 24px;
+      border-radius: 12px;
+      border: 1px solid #2f2f2f;
+    }
+    label {
+      display: block;
+      margin-top: 14px;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #bdbdbd;
+    }
+    input, select, button {
+      width: 100%;
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid #3a3a3a;
+      background: #282828;
+      color: #fff;
+      font-size: 15px;
+      box-sizing: border-box;
+    }
+    button {
+      margin-top: 20px;
+      background: #1db954;
+      color: #000;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+    #output {
+      margin-top: 22px;
+      padding: 18px;
+      background: #151515;
+      border-radius: 8px;
+      border-left: 4px solid #1db954;
+      white-space: pre-wrap;
+      line-height: 1.6;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Gemini Song Lyric Studio</h2>
+
+    <label for="apiKey">Gemini API Key (session only)</label>
+    <input
+      type="password"
+      id="apiKey"
+      placeholder="Paste your Google AI Studio API key"
+      autocomplete="off"
+    />
+
+    <label for="modelSelect">Gemini Model</label>
+    <select id="modelSelect">
+      <option value="gemini-3.8-flash">gemini-3.8-flash</option>
+      <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite</option>
+    </select>
+
+    <label for="songInput">Song Name (and optional Artist)</label>
+    <input
+      type="text"
+      id="songInput"
+      placeholder="e.g., Spring Day - BTS"
+    />
+
+    <label for="modeSelect">What should Gemini generate?</label>
+    <select id="modeSelect">
+      <option value="original_inspired">Original lyrics inspired by the song's vibe & theme</option>
+      <option value="themes_breakdown">Theme, imagery, and song structure breakdown</option>
+    </select>
+
+    <button id="runBtn" onclick="handleGenerate()">Generate</button>
+
+    <div id="output"></div>
+  </div>
+
+  <script>
+    const apiKeyInput = document.getElementById("apiKey");
+    if (sessionStorage.getItem("gemini_api_key")) {
+      apiKeyInput.value = sessionStorage.getItem("gemini_api_key");
+    }
+
+    async function callGemini(apiKey, promptText, model = "gemini-3.8-flash") {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+      const res = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [{ text: promptText }]
+            }
+          ]
+        })
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error?.message || `HTTP ${res.status}`);
+      }
+
+      return data.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(data, null, 2);
+    }
+
+    function buildPrompt(songQuery, mode) {
+      if (mode === "themes_breakdown") {
+        return `Analyze the song "${songQuery}". Summarize its core themes, emotional tone, key imagery/motifs, and typical verse/chorus structure without reproducing full copyrighted lyrics.`;
+      }
+      return `Write original lyrics inspired by the mood, pacing, and emotional themes of "${songQuery}". Include labeled sections (Verse 1, Chorus, Verse 2, Bridge, Chorus) and avoid generic clichés.`;
+    }
+
+    async function handleGenerate() {
+      const apiKey = apiKeyInput.value.trim();
+      const model = document.getElementById("modelSelect").value;
+      const songQuery = document.getElementById("songInput").value.trim();
+      const mode = document.getElementById("modeSelect").value;
+      const btn = document.getElementById("runBtn");
+      const output = document.getElementById("output");
+
+      if (!apiKey) {
+        alert("Please enter your Gemini API key.");
+        return;
+      }
+      if (!songQuery) {
+        alert("Please enter a song name.");
+        return;
+      }
+
+      sessionStorage.setItem("gemini_api_key", apiKey);
+
+      btn.disabled = true;
+      btn.textContent = "Generating...";
+      output.style.display = "block";
+      output.textContent = "Calling Gemini API...";
+
+      try {
+        const promptText = buildPrompt(songQuery, mode);
+        const reply = await callGemini(apiKey, promptText, model);
+        output.textContent = reply;
+      } catch (err) {
+        output.textContent = `Error: ${err.message}`;
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Generate";
+      }
+    }
+  </script>
+</body>
+</html>
